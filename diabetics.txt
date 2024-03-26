@@ -1,53 +1,719 @@
-import numpy as np
+
+# IMPORTANT: RUN THIS CELL IN ORDER TO IMPORT YOUR KAGGLE DATA SOURCES
+# TO THE CORRECT LOCATION (/kaggle/input) IN YOUR NOTEBOOK,
+# THEN FEEL FREE TO DELETE THIS CELL.
+# NOTE: THIS NOTEBOOK ENVIRONMENT DIFFERS FROM KAGGLE'S PYTHON
+# ENVIRONMENT SO THERE MAY BE MISSING LIBRARIES USED BY YOUR
+# NOTEBOOK.
+
+import os
+import sys
+from tempfile import NamedTemporaryFile
+from urllib.request import urlopen
+from urllib.parse import unquote, urlparse
+from urllib.error import HTTPError
+from zipfile import ZipFile
+import tarfile
+import shutil
+
+CHUNK_SIZE = 40960
+DATA_SOURCE_MAPPING = 'pima-indians-diabetes-database:https%3A%2F%2Fstorage.googleapis.com%2Fkaggle-data-sets%2F228%2F482%2Fbundle%2Farchive.zip%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Dgcp-kaggle-com%2540kaggle-161607.iam.gserviceaccount.com%252F20240326%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20240326T112256Z%26X-Goog-Expires%3D259200%26X-Goog-SignedHeaders%3Dhost%26X-Goog-Signature%3D69cbb0f09a35fc1181566619ca04162a1a01d7050ad7f2738e7193b1b74a0036393ea2fe323e3ca26e845fcf7d65b25b57be9a2e5f4922d96ba2942b85b0e75621c5ee4c58bc64246c6dace200d6828a02a755fb50630391498c3de6247711c3af3cedace5c99611d3585d0378ed83418b97203e4462abbd5689c6c3763a857a7075037f6101f24c44e35660d0f7fb91731dac2a49c5398c5eefefc729e5b747d22f976fadacb7a5b8c9e7b30890dd79c607e1406f44a7ae7933e8269bc3a4b9be2adb3654a959ad769ee1a651e2a61d2babd2d638a654c2234883f35f79d571aad3a50cd1884b800cefcd0bc6b8edb81cda51ebc2d77846b61388d46c45796f,diabetes2:https%3A%2F%2Fstorage.googleapis.com%2Fkaggle-data-sets%2F4159828%2F7193406%2Fbundle%2Farchive.zip%3FX-Goog-Algorithm%3DGOOG4-RSA-SHA256%26X-Goog-Credential%3Dgcp-kaggle-com%2540kaggle-161607.iam.gserviceaccount.com%252F20240326%252Fauto%252Fstorage%252Fgoog4_request%26X-Goog-Date%3D20240326T112256Z%26X-Goog-Expires%3D259200%26X-Goog-SignedHeaders%3Dhost%26X-Goog-Signature%3D67d1913aad4cf9c0ef3ec6484b4a14b6738cef857b9242a36e25f697cce677e0210fcbe658cd7598ed04630e548db89fac4512038d6cbca01d933a195116637db5d0629c19e56800279ccebf460f5a3fbaea1ff975a548037d182cb1ff6e9d1e71e93a380cef0a9393f865ee265f1ef1f83e3fbad4df3c9ffcfedaa327379fe779eba434966438445f627f56e5bc8f7d9583ed59fa9d08997b8a48a83af6075cdca08a12baa0a4c93bedb78827c429affd950ef0409fb6e8e7f49fd784a085060608a30183e3b0d0bf87fe3144abb960e4fb131dfcdd5c9b08bdbd72467b6b09de950487a2a8cb2ec3d49a0ae58d20ecc601ac842867f312482430eaead7eece'
+
+KAGGLE_INPUT_PATH='/kaggle/input'
+KAGGLE_WORKING_PATH='/kaggle/working'
+KAGGLE_SYMLINK='kaggle'
+
+!umount /kaggle/input/ 2> /dev/null
+shutil.rmtree('/kaggle/input', ignore_errors=True)
+os.makedirs(KAGGLE_INPUT_PATH, 0o777, exist_ok=True)
+os.makedirs(KAGGLE_WORKING_PATH, 0o777, exist_ok=True)
+
+try:
+  os.symlink(KAGGLE_INPUT_PATH, os.path.join("..", 'input'), target_is_directory=True)
+except FileExistsError:
+  pass
+try:
+  os.symlink(KAGGLE_WORKING_PATH, os.path.join("..", 'working'), target_is_directory=True)
+except FileExistsError:
+  pass
+
+for data_source_mapping in DATA_SOURCE_MAPPING.split(','):
+    directory, download_url_encoded = data_source_mapping.split(':')
+    download_url = unquote(download_url_encoded)
+    filename = urlparse(download_url).path
+    destination_path = os.path.join(KAGGLE_INPUT_PATH, directory)
+    try:
+        with urlopen(download_url) as fileres, NamedTemporaryFile() as tfile:
+            total_length = fileres.headers['content-length']
+            print(f'Downloading {directory}, {total_length} bytes compressed')
+            dl = 0
+            data = fileres.read(CHUNK_SIZE)
+            while len(data) > 0:
+                dl += len(data)
+                tfile.write(data)
+                done = int(50 * dl / int(total_length))
+                sys.stdout.write(f"\r[{'=' * done}{' ' * (50-done)}] {dl} bytes downloaded")
+                sys.stdout.flush()
+                data = fileres.read(CHUNK_SIZE)
+            if filename.endswith('.zip'):
+              with ZipFile(tfile) as zfile:
+                zfile.extractall(destination_path)
+            else:
+              with tarfile.open(tfile.name) as tarfile:
+                tarfile.extractall(destination_path)
+            print(f'\nDownloaded and uncompressed: {directory}')
+    except HTTPError as e:
+        print(f'Failed to load (likely expired) {download_url} to path {destination_path}')
+        continue
+    except OSError as e:
+        print(f'Failed to load {download_url} to path {destination_path}')
+        continue
+
+print('Data source import complete.')
+
+
+import numpy as np # linear algebra
+import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+# Input data files are available in the read-only "../input/" directory
+# For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
+import os
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+
+# You can write up to 20GB to the current directory (/kaggle/working/) that gets preserved as output when you create a version using "Save & Run All" 
+# You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session
+
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import numpy as np
 from sklearn.model_selection import train_test_split
-%matplotlib inline
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+# Build the model architecture
+model = Sequential()
+model.add(Dense(64, activation='relu', input_dim=X_train.shape[1]))
+model.add(Dropout(0.2))
+model.add(Dense(64, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(1, activation='sigmoid'))
+# Compile the model
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+# Define early stopping criteria
+early_stop = EarlyStopping(monitor='val_loss', patience=10)
+# Train the model
+model.fit(X_train, y_train, epochs=100, validation_split=0.2, callbacks=[early_stop])
+# Evaluate the model on the testing set
+y_pred = model.predict_classes(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
 
-df = pd.read_csv('../pima-indians-diabetes-database/diabetes.csv')
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import tensorflow as tf
 
-df.head()
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
 
-df.describe()
+# تجاهل عمود "Glucose"
+dataset = dataset.drop('Glucose', axis=1)
+dataset = dataset.drop('Insulin', axis=1)
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
 
-df.columns
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-df.info()
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
-sns.countplot(df['Outcome'],)
+# Build the model architecture
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(1024, activation='relu', input_dim=X_train.shape[1]),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(256, activation='relu'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(128, activation='tanh'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
 
-sns.heatmap(df)
+# Compile the model
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
 
-sns.scatterplot(df['BloodPressure'],df['Glucose'],hue=df['Outcome'])
+# Train the model
+history = model.fit(X_train, y_train, epochs=200, batch_size=32, validation_split=0.2)
 
-sns.scatterplot(df['SkinThickness'],df['Glucose'],hue=df['Outcome'])
+# Evaluate the model on the testing set
+y_pred = model.predict_classes(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
 
-sns.scatterplot(df['BMI'],df['Glucose'],hue=df['Outcome'])
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import tensorflow as tf
 
-sns.scatterplot(df['Age'],df['Glucose'],hue=df['Outcome'])
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
 
-sns.scatterplot(df['BMI'],df['BloodPressure'],hue=df['Outcome'])
+# تجاهل عمود "Glucose"
+dataset = dataset.drop('Glucose', axis=1)
+dataset = dataset.drop('Insulin', axis=1)
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
 
-sns.scatterplot(df['Insulin'],df['BloodPressure'],hue=df['Outcome'])
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-sns.scatterplot(df['Age'],df['BloodPressure'],hue=df['Outcome'])
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
-sns.scatterplot(df['Age'],df['SkinThickness'],hue=df['Outcome'])
+# Build the model architecture
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(1024, activation='relu', input_dim=X_train.shape[1]),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(256, activation='relu'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(128, activation='tanh'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
 
-sns.scatterplot(df['BMI'],df['Age'],hue=df['Outcome'])
+# Compile the model
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
 
-sns.scatterplot(df['Age'],df['Insulin'],hue=df['Outcome'])
+# Train the model
+history = model.fit(X_train, y_train, epochs=1000, batch_size=32, validation_split=0.2)
 
-X = df.drop('Outcome', axis=1)
-y = df['Outcome']
+# Evaluate the model on the testing set
+y_pred = model.predict_classes(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
 
-X_train,X_test,y_train,y_test = train_test_split(X,y)
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import tensorflow as tf
 
-X_train.head()
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
 
-y_train.head()
+# تجاهل عمود "Glucose"
+dataset = dataset.drop('Glucose', axis=1)
 
-model.summary()
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
 
-model = load_model('model.h5')
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Build the model architecture
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(256, activation='relu', input_dim=X_train.shape[1]),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(256, activation='relu'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(128, activation='tanh'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.5),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
+
+# Compile the model
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(X_train, y_train, epochs=200, batch_size=32, validation_split=0.2)
+
+# Evaluate the model on the testing set
+y_pred = model.predict_classes(X_test)
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+import tensorflow as tf
+
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+
+# تجاهل عمود "Insulin"
+#dataset = dataset.drop('Insulin', axis=1)
+
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Build the model architecture
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(256, activation='relu', input_dim=X_train.shape[1]),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(256, activation='relu'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(128, activation='tanh'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
+
+# Compile the model
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(X_train, y_train, epochs=200, batch_size=32, validation_split=0.2)
+
+# Evaluate the model on the testing set
+y_pred = model.predict(X_test)
+y_pred_classes = [1 if pred > 0.5 else 0 for pred in y_pred]
+accuracy = accuracy_score(y_test, y_pred_classes)
+print("Accuracy:", accuracy)
+
+import matplotlib.pyplot as plt
+
+# Get the loss history
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+# Get the accuracy history
+accuracy = history.history['accuracy']
+val_accuracy = history.history['val_accuracy']
+
+# Plot the loss
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+plt.plot(loss, label='Training Loss')
+plt.plot(val_loss, label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Training and Validation Loss')
+plt.legend()
+
+# Plot the accuracy
+plt.subplot(1, 2, 2)
+plt.plot(accuracy, label='Training Accuracy')
+plt.plot(val_accuracy, label='Validation Accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.title('Training and Validation Accuracy')
+plt.legend()
+
+# Show the plots
+plt.tight_layout()
+plt.show()
+
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+import tensorflow as tf
+
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+
+# Apply oversampling using SMOTE
+oversampler = SMOTE(random_state=42)
+X_resampled, y_resampled = oversampler.fit_resample(X, y)
+
+# Split the resampled dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Build the model architecture
+model = tf.keras.Sequential([
+    tf.keras.layers.Dense(1024, activation='relu', input_dim=X_train.shape[1]),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(1024, activation='relu'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(128, activation='tanh'),
+    tf.keras.layers.BatchNormalization(),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
+
+# Compile the model
+optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy'])
+
+# Train the model
+history = model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2)
+
+# Evaluate the model on the testing set
+y_pred = model.predict(X_test)
+y_pred_classes = [1 if pred > 0.5 else 0 for pred in y_pred]
+accuracy = accuracy_score(y_test, y_pred_classes)
+print("Accuracy:", accuracy)
+
+import pandas as pd
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+
+# Apply oversampling using SMOTE
+oversampler = SMOTE(random_state=42)
+X_resampled, y_resampled = oversampler.fit_resample(X, y)
+
+# Split the resampled dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Define the model architecture
+model = Sequential()
+model.add(Dense(512, activation='relu', input_dim=X_train.shape[1]))
+model.add(Dense(512, activation='relu'))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Apply StratifiedKFold Cross-Validation
+skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
+cv_scores = []
+for train_index, val_index in skf.split(X_train, y_train):
+    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+    
+    model.fit(X_train_fold, y_train_fold, epochs=200, batch_size=32, verbose=0)
+    y_val_pred = model.predict(X_val_fold)
+    y_val_pred_classes = [1 if pred > 0.5 else 0 for pred in y_val_pred]
+    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_classes)
+    cv_scores.append(fold_accuracy)
+    
+# Train the model on the full training set
+model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=0)
+
+# Evaluate the model on the testing set
+y_test_pred = model.predict(X_test)
+y_test_pred_classes = [1 if pred > 0.5 else 0 for pred in y_test_pred]
+test_accuracy = accuracy_score(y_test, y_test_pred_classes)
+
+print("Cross-Validation Accuracy:", cv_scores)
+print("Test Accuracy:", test_accuracy)
+
+import pandas as pd
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+
+# Apply oversampling using SMOTE
+oversampler = SMOTE(random_state=42)
+X_resampled, y_resampled = oversampler.fit_resample(X, y)
+
+# Split the resampled dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Define the model architecture
+model = Sequential()
+model.add(Dense(512, activation='relu', input_dim=X_train.shape[1]))
+model.add(Dense(512, activation='relu'))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(1, activation='tanh'))
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Apply StratifiedKFold Cross-Validation
+skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
+cv_scores = []
+for train_index, val_index in skf.split(X_train, y_train):
+    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+    
+    model.fit(X_train_fold, y_train_fold, epochs=200, batch_size=32, verbose=0)
+    y_val_pred = model.predict(X_val_fold)
+    y_val_pred_classes = [1 if pred > 0.5 else 0 for pred in y_val_pred]
+    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_classes)
+    cv_scores.append(fold_accuracy)
+    
+# Train the model on the full training set
+model.fit(X_train, y_train, epochs=200, batch_size=32, verbose=0)
+
+# Evaluate the model on the testing set
+y_test_pred = model.predict(X_test)
+y_test_pred_classes = [1 if pred > 0.5 else 0 for pred in y_test_pred]
+test_accuracy = accuracy_score(y_test, y_test_pred_classes)
+
+print("Cross-Validation Accuracy:", cv_scores)
+print("Test Accuracy:", test_accuracy)
+
+import pandas as pd
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+
+# Apply oversampling using SMOTE
+oversampler = SMOTE(random_state=42)
+X_resampled, y_resampled = oversampler.fit_resample(X, y)
+
+# Split the resampled dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Define the model architecture
+model = Sequential()
+model.add(Dense(512, activation='relu', input_dim=X_train.shape[1]))
+model.add(Dropout(0.2))
+model.add(Dense(512, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(256, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(1, activation='sigmoid'))
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Apply StratifiedKFold Cross-Validation
+skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
+cv_scores = []
+for train_index, val_index in skf.split(X_train, y_train):
+    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+    
+    model.fit(X_train_fold, y_train_fold, epochs=300, batch_size=64, verbose=0)
+    y_val_pred = model.predict(X_val_fold)
+    y_val_pred_classes = [1 if pred > 0.5 else 0 for pred in y_val_pred]
+    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_classes)
+    cv_scores.append(fold_accuracy)
+    
+# Train the model on the full training set
+model.fit(X_train, y_train, epochs=300, batch_size=64, verbose=0)
+
+# Evaluate the model on the testing set
+y_test_pred = model.predict(X_test)
+y_test_pred_classes = [1 if pred > 0.5 else 0 for pred in y_test_pred]
+test_accuracy = accuracy_score(y_test, y_test_pred_classes)
+
+print("Cross-Validation Accuracy:", cv_scores)
+print("Test Accuracy:", test_accuracy)
+
+import pandas as pd
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+oversampler = SMOTE(random_state=42)
+X_resampled, y_resampled = oversampler.fit_resample(X, y)
+
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+model = Sequential()
+model.add(Dense(1024, activation='relu', input_dim=X_train.shape[1]))
+model.add(Dropout(0.5))
+model.add(Dense(512, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(256, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(64, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(1, activation='sigmoid'))
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
+cv_scores = []
+for train_index, val_index in skf.split(X_train, y_train):
+    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+    
+    model.fit(X_train_fold, y_train_fold, epochs=300, batch_size=64, verbose=0)
+    y_val_pred = model.predict(X_val_fold)
+    y_val_pred_classes = [1 if pred > 0.5 else 0 for pred in y_val_pred]
+    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_classes)
+    cv_scores.append(fold_accuracy)
+  
+model.fit(X_train, y_train, epochs=300, batch_size=64, verbose=0)
+y_test_pred = model.predict(X_test)
+y_test_pred_classes = [1 if pred > 0.5 else 0 for pred in y_test_pred]
+test_accuracy = accuracy_score(y_test, y_test_pred_classes)
+
+print("دقة التحسين المتقاطع:", cv_scores)
+print("دقة الاختبار:", test_accuracy)
+
+import pandas as pd
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+from imblearn.over_sampling import SMOTE
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+
+# Load the PIDD dataset
+dataset = pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+
+# Split dataset into features (X) and labels (y)
+X = dataset.iloc[:, :-1].values
+y = dataset.iloc[:, -1].values
+
+# Apply oversampling using SMOTE
+oversampler = SMOTE(random_state=42)
+X_resampled, y_resampled = oversampler.fit_resample(X, y)
+
+# Split the resampled dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
+
+# Scale the features using StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Define the model architecture
+model = Sequential()
+model.add(Dense(512, activation='relu', input_dim=X_train.shape[1]))
+model.add(Dropout(0.2))
+model.add(Dense(512, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(256, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(256, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(128, activation='relu'))
+model.add(Dropout(0.2))
+model.add(Dense(1, activation='sigmoid'))
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Apply StratifiedKFold Cross-Validation
+skf = StratifiedKFold(n_splits=5, random_state=42, shuffle=True)
+cv_scores = []
+for train_index, val_index in skf.split(X_train, y_train):
+    X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
+    y_train_fold, y_val_fold = y_train[train_index], y_train[val_index]
+    
+    model.fit(X_train_fold, y_train_fold, epochs=300, batch_size=64, verbose=0)
+    y_val_pred = model.predict(X_val_fold)
+    y_val_pred_classes = [1 if pred > 0.5 else 0 for pred in y_val_pred]
+    fold_accuracy = accuracy_score(y_val_fold, y_val_pred_classes)
+    cv_scores.append(fold_accuracy)
+    
+# Train the model on the full training set
+model.fit(X_train, y_train, epochs=300, batch_size=64, verbose=0)
+
+# Evaluate the model on the testing set
+y_test_pred = model.predict(X_test)
+y_test_pred_classes = [1 if pred > 0.5 else 0 for pred in y_test_pred]
+test_accuracy = accuracy_score(y_test, y_test_pred_classes)
+
+print("Cross-Validation Accuracy:", cv_scores)
+print("Test Accuracy:", test_accuracy)
+
