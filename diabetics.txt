@@ -1,54 +1,53 @@
-. import numpy as np
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import warnings
 from sklearn.model_selection import train_test_split
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import roc_curve
-from sklearn.metrics import roc_auc_score
-from sklearn.metrics import confusion_matrix, accuracy_score
-from xgboost import XGBClassifier, plot_importance
-from sklearn.ensemble import RandomForestClassifier
+%matplotlib inline
 
-import warnings
-warnings.filterwarnings('ignore')
+df = pd.read_csv('../pima-indians-diabetes-database/diabetes.csv')
 
-.df=pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
-df
+df.head()
 
-.df.isna().sum()
+df.describe()
 
-.df.info()
+df.columns
 
-. df.describe()
+df.info()
 
-. sns.boxplot(x="Pregnancies", y="Insulin", data=df)
+sns.countplot(df['Outcome'],)
 
-.sns.pairplot(df, hue="Outcome", markers=["o", "s"], corner=True);
+sns.heatmap(df)
 
-.sns.distplot(df.BloodPressure.dropna());
+sns.scatterplot(df['BloodPressure'],df['Glucose'],hue=df['Outcome'])
 
-. df[df['BloodPressure'] == 0].describe()
+sns.scatterplot(df['SkinThickness'],df['Glucose'],hue=df['Outcome'])
 
-.fig, axs = plt.subplots(ncols=3, figsize=(20,10))
-sns.distplot(df.Glucose, ax = axs[0])
-sns.distplot(df.BMI, ax = axs[1])
-sns.distplot(df.Insulin, ax = axs[2])
-plt.show()
+sns.scatterplot(df['BMI'],df['Glucose'],hue=df['Outcome'])
 
-FEATURE ENGINEERING
+sns.scatterplot(df['Age'],df['Glucose'],hue=df['Outcome'])
 
-.X = df.drop('Outcome',axis=1).values
-y = df['Outcome'].values 
+sns.scatterplot(df['BMI'],df['BloodPressure'],hue=df['Outcome'])
 
-.X
+sns.scatterplot(df['Insulin'],df['BloodPressure'],hue=df['Outcome'])
 
-. y
+sns.scatterplot(df['Age'],df['BloodPressure'],hue=df['Outcome'])
 
-. X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.25, random_state = 0)
+sns.scatterplot(df['Age'],df['SkinThickness'],hue=df['Outcome'])
 
-. from sklearn.preprocessing import StandardScaler
-sc = StandardScaler()
-X_train = sc.fit_transform(X_train)
-X_test = sc.transform(X_test)
+sns.scatterplot(df['BMI'],df['Age'],hue=df['Outcome'])
+
+sns.scatterplot(df['Age'],df['Insulin'],hue=df['Outcome'])
+
+X = df.drop('Outcome', axis=1)
+y = df['Outcome']
+
+X_train,X_test,y_train,y_test = train_test_split(X,y)
+
+X_train.head()
+
+y_train.head()
+
+model.summary()
+
+model = load_model('model.h5')
