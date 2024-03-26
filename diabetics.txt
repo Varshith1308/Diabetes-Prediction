@@ -1,0 +1,54 @@
+. import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import confusion_matrix, accuracy_score
+from xgboost import XGBClassifier, plot_importance
+from sklearn.ensemble import RandomForestClassifier
+
+import warnings
+warnings.filterwarnings('ignore')
+
+.df=pd.read_csv('/kaggle/input/pima-indians-diabetes-database/diabetes.csv')
+df
+
+.df.isna().sum()
+
+.df.info()
+
+. df.describe()
+
+. sns.boxplot(x="Pregnancies", y="Insulin", data=df)
+
+.sns.pairplot(df, hue="Outcome", markers=["o", "s"], corner=True);
+
+.sns.distplot(df.BloodPressure.dropna());
+
+. df[df['BloodPressure'] == 0].describe()
+
+.fig, axs = plt.subplots(ncols=3, figsize=(20,10))
+sns.distplot(df.Glucose, ax = axs[0])
+sns.distplot(df.BMI, ax = axs[1])
+sns.distplot(df.Insulin, ax = axs[2])
+plt.show()
+
+FEATURE ENGINEERING
+
+.X = df.drop('Outcome',axis=1).values
+y = df['Outcome'].values 
+
+.X
+
+. y
+
+. X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.25, random_state = 0)
+
+. from sklearn.preprocessing import StandardScaler
+sc = StandardScaler()
+X_train = sc.fit_transform(X_train)
+X_test = sc.transform(X_test)
